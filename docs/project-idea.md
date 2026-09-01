@@ -1,0 +1,1 @@
+The project will use an app to scan a snake and identify whether it is venonmous or not. We might use YOLO for the object detection to identify the snake. We also might use the framework React Native and Expo Go to create an app.
