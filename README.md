@@ -1,2 +1,1 @@
-Hello GitHub!
-This repository will help me prepare for my course project.# Yolo-snake
+# Yolo-snake
