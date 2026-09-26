@@ -81,9 +81,24 @@ SPECIES = [
 def get_place_id(name):
     r = get_places_autocomplete(q=name).get("results", [])
     if not r:
-        sys.exit(f"Place not found: {name}")
+        print(f"  place not found, skipping: {name}")
+        return None
     print(f"Place: {r[0]['display_name']} (id={r[0]['id']})")
     return r[0]["id"]
+
+
+def get_place_ids(place_arg):
+    """Accepts one place, or several separated by '|', e.g.
+    'Alabama, US|Georgia, US|Florida, US'. Returns a list of place_ids."""
+    ids = []
+    for p in place_arg.split("|"):
+        p = p.strip()
+        if not p:
+            continue
+        pid = get_place_id(p)
+        if pid:
+            ids.append(pid)
+    return ids
 
 
 def get_taxon_id(sci_name):
@@ -93,14 +108,21 @@ def get_taxon_id(sci_name):
     return None
 
 
-def fetch_observations(taxon_id, place_id, max_n, quality):
+def fetch_observations(taxon_id, place_ids, max_n, quality, alive_only=False):
     out, id_above = [], None
     while len(out) < max_n:
-        kwargs = dict(taxon_id=taxon_id, place_id=place_id, photos=True,
+        kwargs = dict(taxon_id=taxon_id, place_id=place_ids, photos=True,
                       photo_license=LICENSES, per_page=min(100, max_n - len(out)),
                       order_by="id", order="asc")
         if quality and quality != "any":
             kwargs["quality_grade"] = quality
+        if alive_only:
+            # iNaturalist's "Alive or Dead" annotation: term_id=17, value 18=Alive.
+            # Only catches observations someone has actually annotated -- it
+            # will not find every live-snake photo, but it will reliably
+            # exclude anything tagged Dead (roadkill, museum specimens, etc.)
+            kwargs["term_id"] = 17
+            kwargs["term_value_id"] = 18
         if id_above:
             kwargs["id_above"] = id_above
         time.sleep(REQUEST_DELAY)
@@ -146,10 +168,16 @@ def download(url, path, session):
         return False
 
 
+def sanitize_filename(name):
+    return name.replace(" ", "_").replace("/", "-")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--output-dir", default="./inat_data")
-    ap.add_argument("--place", default="Alabama, US")
+    ap.add_argument("--place", default="Alabama, US",
+                     help="one place, or several separated by '|', e.g. "
+                          "'Alabama, US|Georgia, US|Florida, US|Mississippi, US|Tennessee, US'")
     ap.add_argument("--max-per-species", type=int, default=150,
                      help="max images per venomous/mimic species (default 150)")
     ap.add_argument("--max-per-other", type=int, default=25,
@@ -157,6 +185,10 @@ def main():
     ap.add_argument("--quality-grade", default="research", choices=["research", "needs_id", "casual", "any"])
     ap.add_argument("--species", help="comma-separated scientific names to limit the run")
     ap.add_argument("--skip-other", action="store_true", help="skip the 'other' catch-all species entirely")
+    ap.add_argument("--alive-only", action="store_true",
+                     help="only keep observations annotated 'Alive' on iNaturalist (filters out "
+                          "roadkill/dead specimens, but only catches observations someone actually "
+                          "annotated -- expect fewer results, not a perfect filter)")
     args = ap.parse_args()
 
     species = SPECIES
@@ -168,7 +200,9 @@ def main():
 
     img_dir = os.path.join(args.output_dir, "images")
     os.makedirs(img_dir, exist_ok=True)
-    place_id = get_place_id(args.place)
+    place_ids = get_place_ids(args.place)
+    if not place_ids:
+        sys.exit("No valid places found -- check --place spelling.")
     session = requests.Session()
     session.headers["User-Agent"] = "UAH-CS499-SnakeID-Project/1.0"
 
@@ -181,7 +215,7 @@ def main():
             continue
 
         cap = args.max_per_other if category == "other" else args.max_per_species
-        obs_list = fetch_observations(taxon_id, place_id, cap, args.quality_grade)
+        obs_list = fetch_observations(taxon_id, place_ids, cap, args.quality_grade, args.alive_only)
         print(f"  {len(obs_list)} observations")
 
         species_dir = os.path.join(img_dir, sci.replace(" ", "_"))
@@ -191,7 +225,7 @@ def main():
         for obs in obs_list:
             for rec in photo_records(obs, name, sci, category):
                 n += 1
-                fname = f"{n}.jpg"   # sequential filename per species, starting at 1
+                fname = f"{sanitize_filename(name)}{n}.jpg"   # e.g. Eastern_Diamondback_Rattlesnake1.jpg
                 path = os.path.join(species_dir, fname)
                 if download(rec["url"], path, session):
                     rec["local_path"] = os.path.relpath(path, args.output_dir)
