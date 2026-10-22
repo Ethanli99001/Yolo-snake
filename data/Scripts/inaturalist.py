@@ -6,9 +6,16 @@ Uses the official API via `pyinaturalist` (not HTML scraping). Only keeps
 photos with a usable license (CC0/CC-BY/CC-BY-SA/CC-BY-NC/CC-BY-NC-SA),
 downloads them per-species, and writes manifest.csv with attribution info.
 
+manifest.csv / labels.csv are MERGED on each run (not overwritten), so you can
+scrape species in separate runs without losing earlier records.
+
 Install:  pip install pyinaturalist requests
 Run:      python3 inaturalist_scraper.py --output-dir ./data --max-per-species 150
 Test one: python3 inaturalist_scraper.py --species "Agkistrodon contortrix" --max-per-species 10
+Mimics:   python3 inaturalist_scraper.py --output-dir data/Output --first-photo-only \
+              --max-per-species 400 \
+              --species "Lampropeltis elapsoides,Lampropeltis triangulum,Nerodia sipedon,Nerodia erythrogaster,Heterodon platirhinos,Pantherophis guttatus" \
+              --place "Alabama, US|Georgia, US|Florida, US|Mississippi, US|Tennessee, US"
 """
 
 import argparse, csv, os, sys, time
@@ -161,7 +168,8 @@ def download(url, path, session):
     try:
         r = session.get(url, timeout=30)
         r.raise_for_status()
-        open(path, "wb").write(r.content)
+        with open(path, "wb") as f:
+            f.write(r.content)
         return True
     except requests.RequestException as e:
         print(f"  download failed: {e}")
@@ -172,6 +180,22 @@ def sanitize_filename(name):
     return name.replace(" ", "_").replace("/", "-")
 
 
+def merge_csv(path, new_rows, fieldnames, key):
+    """Merge new rows into an existing CSV instead of overwriting it.
+    Rows with the same key are replaced by the new version."""
+    existing = []
+    if os.path.exists(path):
+        with open(path, newline="", encoding="utf-8-sig") as f:
+            existing = list(csv.DictReader(f))
+    new_keys = {str(r[key]) for r in new_rows}
+    merged = [r for r in existing if str(r.get(key)) not in new_keys] + new_rows
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(merged)
+    return len(merged)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--output-dir", default="./inat_data")
@@ -179,9 +203,9 @@ def main():
                      help="one place, or several separated by '|', e.g. "
                           "'Alabama, US|Georgia, US|Florida, US|Mississippi, US|Tennessee, US'")
     ap.add_argument("--max-per-species", type=int, default=150,
-                     help="max images per venomous/mimic species (default 150)")
+                     help="max observations per venomous/mimic species (default 150)")
     ap.add_argument("--max-per-other", type=int, default=25,
-                     help="max images per 'other' catch-all species (default 25, kept small on purpose)")
+                     help="max observations per 'other' catch-all species (default 25, kept small on purpose)")
     ap.add_argument("--quality-grade", default="research", choices=["research", "needs_id", "casual", "any"])
     ap.add_argument("--species", help="comma-separated scientific names to limit the run")
     ap.add_argument("--skip-other", action="store_true", help="skip the 'other' catch-all species entirely")
@@ -189,6 +213,9 @@ def main():
                      help="only keep observations annotated 'Alive' on iNaturalist (filters out "
                           "roadkill/dead specimens, but only catches observations someone actually "
                           "annotated -- expect fewer results, not a perfect filter)")
+    ap.add_argument("--first-photo-only", action="store_true",
+                     help="download only the first usable photo per observation "
+                          "(avoids the same snake landing in both train and test)")
     args = ap.parse_args()
 
     species = SPECIES
@@ -197,6 +224,8 @@ def main():
     if args.species:
         wanted = {s.strip().lower() for s in args.species.split(",")}
         species = [s for s in species if s[1].lower() in wanted]
+        if not species:
+            sys.exit("None of the --species names matched the SPECIES list -- check spelling.")
 
     img_dir = os.path.join(args.output_dir, "images")
     os.makedirs(img_dir, exist_ok=True)
@@ -207,11 +236,13 @@ def main():
     session.headers["User-Agent"] = "UAH-CS499-SnakeID-Project/1.0"
 
     rows = []
+    summary = []
     for name, sci, category in species:
         print(f"=== {name} ({sci}) ===")
         taxon_id = get_taxon_id(sci)
         if not taxon_id:
             print("  taxon not found, skipping")
+            summary.append((sci, 0, 0))
             continue
 
         cap = args.max_per_other if category == "other" else args.max_per_species
@@ -225,22 +256,23 @@ def main():
         for obs in obs_list:
             for rec in photo_records(obs, name, sci, category):
                 n += 1
-                fname = f"{sanitize_filename(name)}{n}.jpg"   # e.g. Eastern_Diamondback_Rattlesnake1.jpg
+                fname = f"{sanitize_filename(name)}{n}.jpg"   # e.g. Corn_Snake1.jpg
                 path = os.path.join(species_dir, fname)
                 if download(rec["url"], path, session):
                     rec["local_path"] = os.path.relpath(path, args.output_dir)
                     rows.append(rec)
+                    time.sleep(0.3)
+                    if args.first_photo_only:
+                        break   # one photo per observation
                 else:
                     n -= 1  # download failed, don't burn a number
-                time.sleep(0.3)
+                    time.sleep(0.3)
         print(f"  downloaded {n} images")
+        summary.append((sci, len(obs_list), n))
 
     if rows:
         manifest = os.path.join(args.output_dir, "manifest.csv")
-        with open(manifest, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.DictWriter(f, fieldnames=rows[0].keys())
-            w.writeheader()
-            w.writerows(rows)
+        total = merge_csv(manifest, rows, list(rows[0].keys()), key="photo_id")
 
         # Lean labels.csv for labeling/training tools -- just the columns
         # you actually need to point a labeling tool or dataloader at a file
@@ -248,13 +280,13 @@ def main():
         # manifest.csv only.
         label_cols = ["local_path", "scientific_name", "common_name", "category", "observation_id"]
         labels = os.path.join(args.output_dir, "labels.csv")
-        with open(labels, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.DictWriter(f, fieldnames=label_cols)
-            w.writeheader()
-            for r in rows:
-                w.writerow({k: r[k] for k in label_cols})
+        merge_csv(labels, rows, label_cols, key="local_path")
 
-        print(f"\nDone: {len(rows)} images.\n  Manifest: {manifest}\n  Labels:   {labels}")
+        print("\n===== Summary =====")
+        for sci, n_obs, n_img in summary:
+            print(f"  {sci:30s} {n_obs:4d} observations  {n_img:4d} images")
+        print(f"\nDone: {len(rows)} new images ({total} total in manifest).")
+        print(f"  Manifest: {manifest}\n  Labels:   {labels}")
     else:
         print("No images downloaded.")
 

@@ -5,9 +5,9 @@ ROOT = Path(__file__).resolve().parents[2]   # data/Train/trainData.py → Yolo-
 
 # ===== 每次训练前只改这里 =====
 MODEL = "yolo26n.pt"                 # yolo26s.pt
-DATA_VERSION = "Snake-6"             # Snake-7
+DATA_VERSION = "Snake-6"
 EPOCHS = 100                         # change 200
-RUN_NAME = "v6_yolo26n_aug2"         # new name
+RUN_NAME = "v7_yolo26n_aug2"
 # ============================
 
 def train_model():
