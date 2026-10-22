@@ -12,7 +12,7 @@ load_dotenv(ROOT / ".env")
 # ===============================================
 WORKSPACE = "ethan-li-zbawo"
 PROJECT = "snake-jfgly"
-VERSION = 6          # after change to 7
+VERSION = 7          # after change to 7
 FORMAT = "yolo26"
 # ================================================
 
