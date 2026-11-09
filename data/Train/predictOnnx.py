@@ -11,7 +11,6 @@ ONNX_PATH = ROOT / "runs" / "v7_yolo26n_aug2" / "weights" / "best.onnx"
 CONF = 0.5
 SIZE = 640
 
-# 类名要跟模型里的一模一样（目前是大写版本）
 VENOMOUS = {
     "Agkistrodon_Piscivorus", "Agkistrodon_contortrix",
     "Crotalus_Horridus", "Crotalus_adamanteus",
@@ -20,7 +19,7 @@ VENOMOUS = {
 
 
 def preprocess(img):
-    """跟手机端完全一样：拉伸到 640x640 → RGB → /255 → NCHW"""
+    """ 640x640 → RGB → /255 → NCHW"""
     resized = img.convert("RGB").resize((SIZE, SIZE), Image.BILINEAR)
     arr = np.asarray(resized, dtype=np.float32) / 255.0   # HWC, 0~1
     arr = arr.transpose(2, 0, 1)                          # HWC → CHW
@@ -40,7 +39,7 @@ def predict(image_path):
 
     draw = ImageDraw.Draw(img := img.convert("RGB"))
     if len(dets) == 0:
-        print("没有检测到蛇（或置信度低于阈值）")
+        print("did not find the snake （conf to low）")
 
     for x1, y1, x2, y2, conf, cls in dets:
         # 640x640 坐标 → 原图坐标
@@ -64,6 +63,6 @@ def predict(image_path):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print('用法: python data/Train/predictOnnx.py "图片路径"')
+        print('use: python data/Train/predictOnnx.py "path"')
     else:
         predict(sys.argv[1])

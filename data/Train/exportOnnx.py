@@ -2,7 +2,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 ROOT = Path(__file__).resolve().parents[2]   # data/Train/exportOnnx.py → Yolo-snake/
-RUN_NAME = "v7_yolo26n_aug2"   # 要导出的训练结果
+RUN_NAME = "v7_yolo26n_aug2"
 WEIGHTS = ROOT / "runs" / RUN_NAME / "weights" / "best.pt"
 
 def export_onnx():
@@ -12,7 +12,7 @@ def export_onnx():
         imgsz=640,
         simplify=True,
         dynamic=False,
-        nms=True,         # 把 NMS 打包进模型，输出直接是最终检测框
+        nms=True,
     )
     print(f"ONNX 已导出到: {path}")
 

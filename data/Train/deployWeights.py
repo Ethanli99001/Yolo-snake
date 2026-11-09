@@ -11,7 +11,7 @@ WORKSPACE = "ethan-li-zbawo"
 PROJECT = "snake-jfgly"
 VERSION = 6
 RUN_DIR = ROOT / "runs" / "v7_yolo26n_aug2"
-MODEL_TYPE = "yolo26"                         # 报错不支持的话改成 "yolov8"
+MODEL_TYPE = "yolo26"
 
 
 def deploy():

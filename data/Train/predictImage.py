@@ -27,7 +27,7 @@ def predict(image_path):
             status = " venomous" if species in VENOMOUS else " non venomous"
             print(f"{species}  {conf:.0%}  →  {status}")
 
-    result.show()   # 弹出带框的结果图
+    result.show()
     out = ROOT / "runs" / "predict_result.jpg"
     result.save(filename=str(out))
     print(f"save loaction: {out}")
@@ -35,6 +35,6 @@ def predict(image_path):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print('用法: python data/Train/predictImage.py "图片路径"')
+        print('use : python data/Train/predictImage.py "path/to/image"')
     else:
         predict(sys.argv[1])
