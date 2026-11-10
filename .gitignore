@@ -1,27 +1,43 @@
-# ===== Python =====
-__pycache__/
-*.py[cod]
-.venv/
-venv/
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# ===== IDE =====
-.idea/
-.vscode/
+# dependencies
+node_modules/
 
-# ===== 系统文件 =====
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
 .DS_Store
-Thumbs.db
+*.pem
 
-# ===== API key / 密钥 =====
-.env
+# local env files
+.env*.local
 
-# ===== iNaturalist 爬下来的图片（CSV 要提交，图片不提交）=====
-data/Output/images/
+# typescript
+*.tsbuildinfo
 
-# ===== Roboflow 下载的数据集 =====
-data/Train/Snake-*/
+example
 
-# ===== YOLO 训练输出和权重 =====
-runs/
-*.pt
-*.cache
+# generated native folders
+/ios
+/android
